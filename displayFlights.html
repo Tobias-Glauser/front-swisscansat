@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Flight</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Barlow&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Barlow', serif;
+            max-width: 800px;
+            margin: auto;
+        }
+
+        .flight-status {
+            color: #477A8BFF;
+        }
+
+        #flight-container {
+            padding: 0 1em;
+        }
+
+        #flight-container li {
+            border: solid black 1px;
+            border-radius: 25px;
+            margin: 1em;
+            list-style: none;
+        }
+
+        #flight-container a {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: baseline;
+            padding: 1em;
+            text-decoration: none;
+        }
+
+        #flight-container a div:first-child {
+            width: 50%;
+            display: flex;
+        }
+
+        #flight-container a:visited {
+            color: inherit;
+        }
+
+        .flight-name {
+            font-size: 1.4rem;
+        }
+
+        #flight-id {
+            display: none;
+        }
+    </style>
+
+</head>
+<body>
+
+    <h1>
+        Liste des vols
+    </h1>
+
+    <ul id="flight-container">
+    </ul>
+
+
+
+<script>
+
+    let list = [];
+    const flightContainer = document.getElementById("flight-container");
+    const apiURL = 'https://env-7485037.jcloud.ik-server.com/api/v1/'
+
+    flightContainer.addEventListener("click", (event) => {
+        event.preventDefault()
+        let nodeName = event.target.nodeName;
+        let flightId;
+        if (nodeName === "a") {
+            flightId = event.target.querySelector('#flight-id').innerText;
+            openFlight(flightId);
+        } else {
+            flightId = event.target.parentNode.querySelector('#flight-id').innerText;
+            openFlight(flightId);
+        }
+
+    })
+
+    function openFlight(flightId) {
+        for (const flight of list) {
+            if (flight.id == flightId) {
+                console.log(flightId)
+                sessionStorage.setItem('flight-id', flightId)
+
+                switch (flight.status.statusName) {
+                    case "En cours" :
+                        window.open('displayFlight.html', '_self');
+                        break;
+                    case "Terminé" :
+                        window.open('replayFlight.html', '_self');
+                }
+            }
+
+        }
+    }
+
+    class FlightStatus {
+        id = null;
+        statusName = "";
+        constructor(status) {
+            this.id = status.id;
+            this.statusName = status.statusName;
+        }
+    }
+    class Flight{
+        id = null;
+        status = null;
+        flightName = "";
+        flightDateTime = null;
+
+        constructor(flight) {
+            this.id = flight.id;
+            this.status = new FlightStatus(flight.status);
+            this.flightName = flight.flightName;
+            this.flightDateTime = flight.flightDateTime;
+        }
+
+    }
+
+    function getFlights() {
+        // Create a request variable and assign a new XMLHttpRequest object to it.
+        let request = new XMLHttpRequest()
+
+        // Open a new connection, using the GET request on the URL endpoint
+        request.open('GET', apiURL + 'flight', true)
+        request.setRequestHeader('Access-Control-Allow-Origin','*');
+        request.setRequestHeader('Content-type','application/json');
+        request.setRequestHeader('Sec-Fetch-Mode', 'cors');
+
+        request.onload = function () {
+            let data = JSON.parse(request.responseText);
+            list = [];
+            data.forEach(function (flight) {
+                list.push(new Flight(flight))
+            })
+            addFlights(data)
+        }
+
+// Send request
+        request.send()
+    }
+
+    getFlights();
+    console.log(list)
+
+    function addFlights(flights) {
+        flightContainer.innerHTML = "";
+        for (let flight of flights) {
+            flightContainer.innerHTML += `
+            <li>
+                <a href="">
+                    <div class="flight-name">${flight.flightName}</div>
+                    <div class="flight-date-time">${flight.flightDateTime}</div>
+                    <div class="flight-status">${flight.status.statusName}</div>
+                    <span id="flight-id">${flight.id}</span>
+                </a>
+            </li>`;
+
+        }
+    }
+
+    var intervalId = window.setInterval(function(){
+        // call your function here
+        getFlights()
+        console.log('updated flights')
+    }, 10000);
+</script>
+</body>
+</html>

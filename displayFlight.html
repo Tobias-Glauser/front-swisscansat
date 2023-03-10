@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Flight</title>
+    <script src="https://cdn.anychart.com/releases/8.11.0/js/anychart-base.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Barlow&display=swap" rel="stylesheet">
+
+    <style>
+        html, body {
+            height: 100%;
+            font-family: 'Barlow', serif;
+        }
+
+        body {
+            max-width: 800px;
+            margin: auto;
+        }
+
+        h1 {
+            font-size: 3em;
+            margin: .5rem 0;
+        }
+
+        h2.flight-date {
+            color: #c1bfbf;
+            font-size: 2em;
+            margin: .5rem 0;
+        }
+
+        #container {
+            height: 500px;
+        }
+
+        .data-bloc {
+            border: 1px solid rgba(0, 0, 0, 0.2);
+            margin: 0.5em;
+            padding: 1.3em;
+            border-radius: 16px;
+        }
+
+        .data-bloc > div {
+            color: #477A8B;
+            text-align: center;
+            font-size: 2rem;
+            width: 4em;
+        }
+
+        .data-bloc > div:first-child {
+            color: #000000;
+        }
+
+        .data-bloc > div.long-texte {
+            font-size: 1.5rem;
+            text-align: center;
+            width: 100%;
+        }
+
+        .live-data {
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+        }
+
+        body {
+            font-family: 'Barlow', serif;
+        }
+
+        .flight-status {
+            color: #477A8BFF;
+        }
+
+        #flight-container a {
+            display: block;
+            justify-content: space-between;
+            border: solid black 1px;
+            border-radius: 25px;
+            padding: 1em;
+            margin: 1em;
+        }
+
+        #connexion {
+            text-align: center;
+        }
+
+        #connexion button {
+            background-color: #477A8B;
+            color: #FFFFFF;
+            font-size: 1em;
+            border-radius: 50px;
+            border: none;
+            padding: 1rem;
+        }
+    </style>
+
+</head>
+<body>
+
+<section class="header">
+    <h1 id="flight-name">Vol test 1</h1>
+    <h2 class="flight-date">19.02.2023 14h00</h2>
+</section>
+<section class="altitude-chart">
+    <h2>Altitude de la capsule</h2>
+    <div id="container"></div>
+</section>
+<h2>Données en direct</h2>
+<section class="live-data">
+
+    <div class="data-bloc">
+        <div>Altitude</div>
+        <div id="altitude"></div>
+    </div>
+    <div class="data-bloc">
+        <div>CO2</div>
+        <div id="co2"></div>
+    </div>
+    <div class="data-bloc">
+        <div>Humidité</div>
+        <div id="humidity"></div>
+    </div>
+    <div class="data-bloc">
+        <div>Temp.</div>
+        <div id="temperature"></div>
+    </div>
+    <div class="data-bloc">
+        <div>Pression</div>
+        <div class="long-texte" id="pressure"></div>
+    </div>
+    <div class="data-bloc">
+        <div>GPS</div>
+        <div class="long-texte" id="gpsN"></div>
+        <div class="long-texte" id="gpsE"></div>
+    </div>
+</section>
+<section id="connexion">
+    <button>Se connecter</button>
+</section>
+
+<script>
+
+    let flightData = [];
+    const flightContainer = document.getElementById("flight-container");
+    const flightName = document.getElementById("flight-name");
+    const flightDate = document.querySelector('.flight-date')
+    const seConnecterButton = document.querySelector('#connexion button')
+    const flightId = sessionStorage.getItem('flight-id');
+    const container = document.getElementById('container');
+    const apiURL = 'https://env-7485037.jcloud.ik-server.com/api/v1/'
+    let newData = [];
+    let dataSet = []
+    let chart;
+    let flight;
+
+    const wait = async (ms) => {
+        return new Promise(resolve => {
+            setTimeout(resolve, ms);
+        });
+    }
+
+    class FlightData {
+        id;
+        flight;
+        timestamp;
+        altitude;
+        co2Measure;
+        tempMeasure;
+        gps;
+        humidityMeasure;
+        airPressureMeasure;
+
+        constructor(flightData) {
+            this.id = flightData.id;
+            this.flight = new Flight(flightData.flight);
+            this.timestamp = new Date(flightData.timestamp);
+            this.altitude = flightData.altitude;
+            this.co2Measure = flightData.co2Measure;
+            this.tempMeasure = flightData.tempMeasure;
+            this.gps = flightData.gps;
+            this.humidityMeasure = flightData.humidityMeasure;
+            this.airPressureMeasure = flightData.airPressureMeasure;
+            console.log(flightData.airPressureMeasure, this.airPressureMeasure)
+        }
+    }
+
+    class FlightDataSearchQuery {
+        timestamp;
+        flightId;
+        page;
+        size;
+
+        constructor(timestamp, flightId, page, size) {
+            this.timestamp = timestamp;
+            this.flightId = flightId;
+            this.page = page;
+            this.size = size;
+        }
+
+    }
+
+    class SearchResult {
+        page;
+        pageSize;
+        totalElements;
+        totalPages;
+        content;
+
+        constructor(searchResult) {
+            this.page = searchResult.page;
+            this.pageSize = searchResult.pageSize;
+            this.totalElements = searchResult.totalElements;
+            this.totalPages = searchResult.totalPages;
+            this.content = searchResult.content;
+        }
+    }
+
+    class FlightStatus {
+        id = null;
+        statusName = "";
+
+        constructor(status) {
+            this.id = status.id;
+            this.statusName = status.statusName;
+        }
+    }
+
+    class Flight {
+        id = null;
+        status = null;
+        flightName = "";
+        flightDateTime = null;
+
+        constructor(flight) {
+            this.id = flight.id;
+            this.status = new FlightStatus(flight.status);
+            this.flightName = flight.flightName;
+            this.flightDateTime = flight.flightDateTime;
+        }
+
+    }
+
+    //     function getFlights() {
+    //         // Create a request variable and assign a new XMLHttpRequest object to it.
+    //         let request = new XMLHttpRequest()
+    //
+    //         // Open a new connection, using the GET request on the URL endpoint
+    //         request.open('GET', 'http://localhost:8080/api/v1/flight', true)
+    //         request.setRequestHeader('Access-Control-Allow-Origin','*');
+    //         request.setRequestHeader('Content-type','application/json');
+    //         request.setRequestHeader('Sec-Fetch-Mode','no-cors');
+    //
+    //         request.onload = function () {
+    //             let data = JSON.parse(request.responseText);
+    //             data.forEach(function (flight) {
+    //                 flightData.push(new Flight(flight))
+    //             })
+    //             addFlights(data)
+    //         }
+    //
+    // // Send request
+    //         request.send()
+    //     }
+
+    async function getFlight() {
+        return new Promise(async callback => {
+            // Create a request variable and assign a new XMLHttpRequest object to it.
+            let request = new XMLHttpRequest()
+
+            // Open a new connection, using the GET request on the URL endpoint
+            request.open('GET', apiURL + 'flight/' + flightId, true)
+            request.setRequestHeader('Access-Control-Allow-Origin', '*');
+            request.setRequestHeader('Content-type', 'application/json');
+            request.setRequestHeader('Sec-Fetch-Mode', 'cors');
+            // request.setRequestHeader('Authorization', 'Basic ' + btoa('Admin:admin'))
+
+            request.onload = function () {
+                let data = JSON.parse(request.responseText);
+
+                callback(new Flight(data))
+            }
+
+
+// Send request
+            request.send()
+
+        })
+    }
+
+    async function getAllData() {
+        return new Promise(async callback =>
+        {
+            // let lastTimestamp = new Date(0o000, 0o0, 0o000, 0o0, 0o0);
+            let lastTimestamp = new Date(2023, 1, 16, 10, 58);
+            if (flightData.length > 0) {
+                lastTimestamp = flightData.slice(-1)[0].timestamp
+            }
+
+            let searchQuery = new FlightDataSearchQuery(lastTimestamp, flightId, 0, 1000)
+            if (newData.length !== 0) {
+                newData = [];
+            }
+            await executeGetFlightData(searchQuery);
+            callback()
+        })
+    }
+
+    async function executeGetFlightData(searchQuery) {
+        return new Promise(
+            callback => {
+                let request = new XMLHttpRequest()
+                console.log(searchQuery.timestamp)
+                console.log(searchQuery.timestamp.toUTCString())
+                console.log(searchQuery.timestamp.toISOString().replace('Z', ''))
+
+                let ISODate = new Date(searchQuery.timestamp.getTime() - (searchQuery.timestamp.getTimezoneOffset() * 60000)).toISOString();
+                // Open a new connection, using the GET request on the URL endpoint
+                request.open('GET', apiURL + 'flightdata?flightId=' + searchQuery.flightId + '&page=' + searchQuery.page + '&size=' + searchQuery.size + '&timestamp=' + ISODate.replace('Z', ''), true)
+                request.setRequestHeader('Access-Control-Allow-Origin', '*');
+                request.setRequestHeader('Content-type', 'application/json');
+                // request.setRequestHeader('Sec-Fetch-Mode','no-cors');
+
+                let searchResult;
+
+                request.onload = async function () {
+                    let data = JSON.parse(request.responseText);
+                    data.content.forEach(function (flight) {
+                        let flightObject =  new FlightData(flight);
+                        newData.push(flightObject)
+                    })
+                    console.log(data)
+                    searchResult = new SearchResult(data)
+
+                    if (searchResult.totalPages > searchResult.page + 1) {
+                        console.log(searchResult.pageSize)
+                        let searchQuery = new FlightDataSearchQuery(newData.slice(-1)[0].timestamp, flightId, 0, searchResult.pageSize)
+                        await executeGetFlightData(searchQuery)
+                    } else {
+                        flightData = flightData.concat(newData)
+                        if (newData.length > 0) {
+                            createChart()
+                            updateFront();
+                        }
+                        console.log("finised")
+                    }
+                    callback();
+
+                }
+
+                request.send();
+            }
+        )
+    }
+
+    //
+    // getFlights();
+    console.log(flightData)
+
+    function addFlights(flights) {
+        for (let flight of flights) {
+            flightContainer.innerHTML += `
+            <li>
+            <div>${flight.flightName}</div>
+            <div>${flight.flightDateTime}</div>
+            <div class="flight-status">${flight.status.statusName}</div>
+        </li>`;
+
+        }
+    }
+
+    (async () => {
+        flight = await getFlight();
+        flightName.innerText = flight.flightName;
+        flightDate.innerText = flight.flightDateTime;
+            while (true) {
+                console.log("Fetching")
+                await getAllData()
+                console.log("Got data")
+                await wait(500)
+                console.log("finished waiting")
+            }
+        }
+    )()
+    // getAllData();
+    // var intervalId = window.setInterval(function(){
+    //     // call your function here
+    //     getAllData()
+    //     console.log('updated flight data')
+    // }, 1000);
+
+    function updateFront() {
+        if (flightData.length === 0) {
+            return
+        }
+        const divAltitude = document.getElementById('altitude');
+        const divCo2 = document.getElementById('co2');
+        const divHumidity = document.getElementById('humidity');
+        const divTemperature = document.getElementById('temperature');
+        const divPressure = document.getElementById('pressure');
+        const divGpsN = document.getElementById('gpsN');
+        const divGpsE = document.getElementById('gpsE');
+
+        let lastFlightData = flightData.slice(-1)[0];
+
+        divAltitude.innerText = lastFlightData.altitude + " M";
+        divCo2.innerText = lastFlightData.co2Measure + " %";
+        divHumidity.innerText = lastFlightData.humidityMeasure + " %";
+        divTemperature.innerText = lastFlightData.tempMeasure + " °C";
+        divPressure.innerText = lastFlightData.airPressureMeasure + " hPa";
+        const splitGPS = lastFlightData.gps.split('-');
+        divGpsN.innerText = 'N ' + splitGPS[0];
+        divGpsE.innerText = 'E ' + splitGPS[1];
+
+    }
+    let chartData = []
+    function createChart() {
+        container.innerHTML = ''
+        chart = anychart.line();
+
+        // create a data set
+        dataSet = anychart.data.set(getData());
+
+        // map the data for all series
+        let firstSeriesData = dataSet.mapAs({x: 0, value: 1});
+
+        // create the series and name them
+        let firstSeries = chart.line(firstSeriesData);
+
+        firstSeries.name("Atltitude");
+        firstSeries.normal().fill("#477A8B");
+        firstSeries.hovered().fill("#477A8B");
+        firstSeries.selected().fill("#477A8B");
+        firstSeries.normal().stroke("#477A8B");
+        firstSeries.hovered().stroke("#477A8B");
+        firstSeries.selected().stroke("#477A8B");
+
+        chart.xAxis().title("temps [s]")
+        chart.yAxis().title("Altitude [m]")
+
+        // specify where to display the chart
+        chart.container("container");
+
+        // chart.color = chart.color("Black")
+
+        // draw the resulting chart
+        chart.draw();
+    }
+
+    function getData() {
+        let result = []
+        for (const data of flightData) {
+            result.push([data.timestamp.toLocaleTimeString()+ '.' + data.timestamp.getMilliseconds(), data.altitude])
+        }
+        return result;
+    }
+
+    function addPoint(data) {
+        dataSet.append({x: data.timestamp.toLocaleTimeString() + '.' + data.timestamp.getMilliseconds(), value: data.altitude})
+        console.log("updatedChart")
+    }
+
+    seConnecterButton.addEventListener("click", (event) => {
+        let user = prompt(`Nom d'utilisateur :`);
+        let password = prompt(`password :`);
+
+        if (user !== "" && password !== "") {
+
+        }
+        // await replayFlight();
+    })
+</script>
+</body>
+</html>
